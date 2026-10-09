@@ -61,8 +61,7 @@ struct ContentView: View {
         // whole window and the sidebar floats on it as glass, like CleanMyMac.
         HStack(spacing: 0) {
             Sidebar(selection: Binding(get: { current }, set: { screen = $0 }))
-                .frame(width: 232)
-                .padding(10)
+                .frame(width: 228)
             ZStack {
                 switch current {
                 case .junk: JunkView(model: junk)
@@ -77,8 +76,9 @@ struct ContentView: View {
                 insertion: .opacity.combined(with: .offset(y: 14)).combined(with: .scale(scale: 0.985)),
                 removal: .opacity
             ))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
             .padding(.top, 22)
+            .clipped()
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.88), value: current)
         .background(LiveBackground(screen: current))
@@ -94,15 +94,22 @@ struct Sidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Color.clear.frame(height: 34) // room for the traffic-light buttons
+            // Room for the traffic-light buttons, which sit inside the sidebar like in Finder or CleanMyMac.
+            Color.clear.frame(height: 30)
             section("Cleanup", [.junk, .large, .uninstaller])
             section("Performance", [.disk, .memory])
-            Spacer()
+            Spacer(minLength: 12)
             SidebarDiskGauge()
         }
-        .padding(10)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
         .frame(maxHeight: .infinity)
-        .glass(cornerRadius: 22)
+        // Full-height column flush with the window edge: a darker translucent tint over the live
+        // backdrop, with a hairline on the inner edge.
+        .background(.black.opacity(0.28))
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(.white.opacity(0.08)).frame(width: 1)
+        }
     }
 
     private func section(_ title: String, _ screens: [Screen]) -> some View {

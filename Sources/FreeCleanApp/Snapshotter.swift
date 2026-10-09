@@ -8,7 +8,11 @@ import SwiftUI
 enum Snapshotter {
     static func run(into dir: URL) async {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let only = ProcessInfo.processInfo.environment["FREECLEAN_SNAPSHOT_ONLY"]
+        let env = ProcessInfo.processInfo.environment
+        let only = env["FREECLEAN_SNAPSHOT_ONLY"]
+        // e.g. FREECLEAN_SNAPSHOT_SIZE=1000x680 to check small windows.
+        let dims = (env["FREECLEAN_SNAPSHOT_SIZE"] ?? "1120x740").split(separator: "x").compactMap { Double($0) }
+        let size = dims.count == 2 ? CGSize(width: dims[0], height: dims[1]) : CGSize(width: 1120, height: 740)
 
         let junk = JunkModel()
         let large = LargeFilesModel()
@@ -38,7 +42,7 @@ enum Snapshotter {
         for (name, screen, j, l) in shots where only.map({ name.localizedCaseInsensitiveContains($0) }) ?? true {
             for dark in [false, true] {
                 let view = ContentView(screen: screen, junk: j, large: l, apps: apps)
-                let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: 1120, height: 740),
+                let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: size.width, height: size.height),
                                       styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                       backing: .buffered, defer: false)
                 window.isReleasedWhenClosed = false

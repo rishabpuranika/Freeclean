@@ -86,11 +86,11 @@ struct UninstallerView: View {
                 .scrollIndicators(.never)
             }
             .glass(cornerRadius: 20)
-            .padding([.leading, .vertical], 14)
-            .padding(.trailing, 4)
-            .frame(minWidth: 250, idealWidth: 280, maxWidth: 350)
+            .frame(width: 270)
+            .padding(.leading, 18)
+            .padding(.vertical, 14)
 
-            detail.frame(minWidth: 460, maxWidth: .infinity)
+            detail.frame(minWidth: 0, maxWidth: .infinity)
         }
         .task { if model.apps.isEmpty { await model.load() } }
     }

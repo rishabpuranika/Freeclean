@@ -165,6 +165,7 @@ extension GradientButtonStyle {
 }
 
 /// The big animated orb button used on landing screens (inspired by CleanMyMac's scan button).
+/// The ring and glow run as Core Animation (see `OrbAura`); only the scan-time sparks use SwiftUI animation.
 struct HeroButton: View {
     let screen: Screen
     let title: String
@@ -173,45 +174,18 @@ struct HeroButton: View {
     var progress: Double?
     let action: () -> Void
     @ViewState private var hovering = false
+    @ViewState private var running = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var animate: Bool { running && !reduceMotion }
 
     var body: some View {
         Button(action: action) {
-            TimelineView(.animation(minimumInterval: 1 / 60, paused: reduceMotion)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let breathe = reduceMotion ? 0 : sin(t * (busy ? 3 : 1.4))
-                orb(t: t, breathe: breathe)
-            }
-            .frame(width: 260, height: 260)
-            .contentShape(Circle().inset(by: 40))
-        }
-        .buttonStyle(OrbPressStyle())
-        .disabled(busy)
-        .onHover { h in withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { hovering = h } }
-    }
-
-    private func orb(t: Double, breathe: Double) -> some View {
-        let spin = Angle.degrees(reduceMotion ? 0 : t * (busy ? 160 : 28))
-        return ZStack {
-            // Soft outer glow that breathes.
-            Circle()
-                .fill(RadialGradient(colors: [screen.colors[1].opacity(0.55), .clear], center: .center,
-                                     startRadius: 60, endRadius: 130))
-                .scaleEffect(1 + 0.05 * breathe + (hovering ? 0.06 : 0))
-
-            // Rotating light ring.
-            Circle()
-                .strokeBorder(AngularGradient(colors: [screen.colors[0], .white.opacity(0.9), screen.colors[1],
-                                                       screen.colors[0].opacity(0.1), screen.colors[0]],
-                                              center: .center),
-                              lineWidth: busy ? 4 : 2.5)
-                .frame(width: 196, height: 196)
-                .rotationEffect(spin)
-                .blur(radius: 0.6)
-                .opacity(0.9)
-
-            if busy {
-                if let progress, progress > 0 {
+            ZStack {
+                OrbAura(screen: screen, busy: busy)
+                    .scaleEffect(hovering ? 1.06 : 1)
+                if busy { sparks.transition(.opacity) }
+                if busy, let progress, progress > 0 {
                     Circle().trim(from: 0, to: progress)
                         .stroke(.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                         .frame(width: 214, height: 214)
@@ -219,41 +193,58 @@ struct HeroButton: View {
                         .shadow(color: .white.opacity(0.7), radius: 6)
                         .animation(.smooth, value: progress)
                 }
-                // Orbiting sparks.
-                ForEach(0..<3) { i in
-                    Circle().fill(.white).frame(width: 6, height: 6)
-                        .shadow(color: .white, radius: 4)
-                        .offset(y: -107)
-                        .rotationEffect(.degrees(t * (120 + Double(i) * 40) + Double(i) * 120))
-                }
+                orb
             }
-
-            // Glass orb.
-            ZStack {
-                Circle().fill(screen.gradient)
-                Circle().fill(RadialGradient(colors: [.white.opacity(0.5), .clear], center: .init(x: 0.35, y: 0.2),
-                                             startRadius: 2, endRadius: 90))
-                Ellipse().fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0)], startPoint: .top,
-                                              endPoint: .bottom))
-                    .frame(width: 110, height: 52)
-                    .offset(y: -44)
-                    .blur(radius: 2)
-                Circle().strokeBorder(.white.opacity(0.45), lineWidth: 1)
-                VStack(spacing: 6) {
-                    Image(systemName: screen.icon)
-                        .font(.system(size: 44, weight: .semibold))
-                        .symbolEffect(.pulse, isActive: busy)
-                        .symbolEffect(.bounce, value: hovering)
-                    Text(busy ? "Scanning" : title).font(.title3.weight(.semibold))
-                        .contentTransition(.opacity)
-                }
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-            }
-            .frame(width: 168, height: 168)
-            .shadow(color: screen.colors[1].opacity(0.6), radius: hovering ? 30 : 20, y: 10)
-            .scaleEffect(1 + 0.015 * breathe + (hovering ? 0.04 : 0))
+            .frame(width: 260, height: 260)
+            .contentShape(Circle().inset(by: 40))
         }
+        .buttonStyle(OrbPressStyle())
+        .disabled(busy)
+        .onHover { h in withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { hovering = h } }
+        .onAppear { running = true }
+        .onDisappear { running = false }
+        .animation(.easeInOut(duration: 0.4), value: busy)
+    }
+
+    private var sparks: some View {
+        ZStack {
+            ForEach(0..<3) { i in
+                Circle().fill(.white).frame(width: 6, height: 6)
+                    .shadow(color: .white, radius: 4)
+                    .offset(y: -107)
+                    .rotationEffect(.degrees(Double(i) * 120))
+            }
+        }
+        .rotationEffect(.degrees(animate ? 360 : 0))
+        .animation(animate ? .linear(duration: 2.2).repeatForever(autoreverses: false) : .default, value: animate)
+    }
+
+    private var orb: some View {
+        ZStack {
+            Circle().fill(screen.gradient)
+            Circle().fill(RadialGradient(colors: [.white.opacity(0.5), .clear], center: .init(x: 0.35, y: 0.2),
+                                         startRadius: 2, endRadius: 90))
+            Ellipse().fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0)], startPoint: .top,
+                                          endPoint: .bottom))
+                .frame(width: 110, height: 52)
+                .offset(y: -44)
+                .blur(radius: 2)
+            Circle().strokeBorder(.white.opacity(0.45), lineWidth: 1)
+            VStack(spacing: 6) {
+                Image(systemName: screen.icon)
+                    .font(.system(size: 44, weight: .semibold))
+                    .symbolEffect(.pulse, isActive: busy)
+                    .symbolEffect(.bounce, value: hovering)
+                Text(busy ? "Scanning" : title).font(.title3.weight(.semibold))
+                    .contentTransition(.opacity)
+            }
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        }
+        .frame(width: 168, height: 168)
+        .compositingGroup()
+        .shadow(color: screen.colors[1].opacity(0.6), radius: hovering ? 30 : 20, y: 10)
+        .scaleEffect(hovering ? 1.04 : 1)
     }
 }
 

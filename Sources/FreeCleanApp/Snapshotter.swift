@@ -25,6 +25,15 @@ enum Snapshotter {
         var shots: [(String, Screen, JunkModel, LargeFilesModel)] = Screen.allCases.map { ($0.id, $0, junk, large) }
         shots.append(("Smart Scan landing", .junk, landing.0, landing.1))
         shots.append(("Large landing", .large, landing.0, landing.1))
+        let scanning = JunkModel()
+        shots.append(("Smart Scan scanning", .junk, scanning, landing.1))
+        let done = JunkModel()
+        var fake = TrashReport()
+        fake.freed = 2_480_000_000
+        fake.trashed = Array(repeating: Paths.home, count: 42)
+        done.report = fake
+        done.phase = .done
+        shots.append(("Smart Scan done", .junk, done, landing.1))
 
         for (name, screen, j, l) in shots where only.map({ name.localizedCaseInsensitiveContains($0) }) ?? true {
             for dark in [false, true] {
@@ -33,10 +42,15 @@ enum Snapshotter {
                                       styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                       backing: .buffered, defer: false)
                 window.isReleasedWhenClosed = false
+                // Match the real window (.hiddenTitleBar): transparent title bar, content underneath.
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .hidden
                 window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
                 window.contentView = NSHostingView(rootView: view)
                 window.orderFrontRegardless()
-                try? await Task.sleep(for: .seconds(screen == .memory ? 7 : screen == .disk ? 25 : 3))
+                if j === scanning { Task { await scanning.scan() } }
+                let wait: Double = j === scanning ? 1.2 : j === done ? 1.6 : screen == .memory ? 7 : screen == .disk ? 25 : 3
+                try? await Task.sleep(for: .seconds(wait))
                 guard let target = window.contentView?.superview ?? window.contentView else { continue }
                 if let rep = target.bitmapImageRepForCachingDisplay(in: target.bounds) {
                     target.cacheDisplay(in: target.bounds, to: rep)

@@ -8,6 +8,7 @@ struct DiskView: View {
     @ViewState private var root = Paths.home
     @ViewState private var loading = false
     @ViewState private var hovered: String?
+    @ViewState private var revealed = false
 
     private static let palette: [Color] = [.blue, .purple, .pink, .orange, .yellow, .green, .teal, .indigo]
 
@@ -34,10 +35,10 @@ struct DiskView: View {
             }
             ScrollView {
                 VStack(spacing: 16) {
-                    if let v = volume { volumeCard(v) }
+                    if let v = volume { volumeCard(v).appear(delay: 0.05) }
                     HStack(alignment: .top, spacing: 16) {
-                        chartCard.frame(width: 300)
-                        folderList
+                        chartCard.frame(width: 300).appear(delay: 0.12)
+                        folderList.appear(delay: 0.18)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -65,6 +66,7 @@ struct DiskView: View {
                     }
                 }
                 .frame(height: 12)
+                .shadow(color: Screen.disk.colors[0].opacity(0.5), radius: 8)
                 Text("\(v.used.bytes) used of \(v.total.bytes) (\(Int(frac * 100))%)").font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -82,6 +84,10 @@ struct DiskView: View {
                 }
                 .chartLegend(.hidden)
                 .frame(height: 220)
+                .rotationEffect(.degrees(revealed ? 0 : -90))
+                .scaleEffect(revealed ? 1 : 0.8)
+                .opacity(revealed ? 1 : 0)
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
                 if !loading { VStack(spacing: 2) {
                     let total = folders.totalSize
                     let focus = slices.first { $0.id == hovered }
@@ -156,8 +162,11 @@ struct DiskView: View {
         Task {
             let r = await Task.detached { await DiskUsage.breakdown(of: url) }.value
             if root == url {
+                // Swap data without animation (Swift Charts traps animating sectors in), then reveal the view.
+                revealed = false
                 folders = r
                 loading = false
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.75)) { revealed = true }
             }
         }
     }

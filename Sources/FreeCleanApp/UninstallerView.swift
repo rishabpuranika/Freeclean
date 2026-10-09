@@ -54,9 +54,10 @@ final class UninstallerModel {
 
 struct UninstallerView: View {
     @Bindable var model: UninstallerModel
+    @Namespace private var highlight
 
     var body: some View {
-        HSplitView {
+        HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -66,26 +67,28 @@ struct UninstallerView: View {
                             .buttonStyle(.borderless).foregroundStyle(.secondary)
                     }
                 }
-                .padding(8)
-                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .glassCapsule()
                 .padding(12)
-                List(model.filtered, selection: Binding(
-                    get: { model.current?.url },
-                    set: { url in Task { await model.select(model.apps.first { $0.url == url }) } }
-                )) { app in
-                    HStack(spacing: 10) {
-                        fileIcon(app.url).resizable().frame(width: 32, height: 32)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(app.name).lineLimit(1)
-                            Text(app.version.map { "Version \($0)" } ?? " ").font(.caption).foregroundStyle(.secondary)
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(model.filtered) { app in
+                            AppRow(app: app, selected: model.current?.url == app.url, namespace: highlight) {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                                    Task { await model.select(app) }
+                                }
+                            }
                         }
                     }
-                    .padding(.vertical, 2)
-                    .tag(app.url)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
                 }
-                .listStyle(.sidebar)
+                .scrollIndicators(.never)
             }
-            .frame(minWidth: 240, idealWidth: 270, maxWidth: 340)
+            .glass(cornerRadius: 20)
+            .padding([.leading, .vertical], 14)
+            .padding(.trailing, 4)
+            .frame(minWidth: 250, idealWidth: 280, maxWidth: 350)
 
             detail.frame(minWidth: 460, maxWidth: .infinity)
         }
@@ -96,8 +99,10 @@ struct UninstallerView: View {
         if let app = model.current {
             VStack(spacing: 0) {
                 VStack(spacing: 10) {
-                    fileIcon(app.url).resizable().frame(width: 96, height: 96)
-                        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                    fileIcon(app.url).resizable().frame(width: 104, height: 104)
+                        .shadow(color: Screen.uninstaller.colors[0].opacity(0.5), radius: 24, y: 8)
+                        .id(app.url)
+                        .transition(.scale(scale: 0.7).combined(with: .opacity))
                     Text(app.name).font(.title.weight(.bold))
                     HStack(spacing: 8) {
                         if let v = app.version { Text("Version \(v)") }
@@ -114,38 +119,49 @@ struct UninstallerView: View {
                 }
                 .padding(.top, 28).padding(.bottom, 18)
                 .frame(maxWidth: .infinity)
-                .background(GlowBackground(screen: .uninstaller).clipped())
+                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: app.url)
                 if let r = model.report {
                     ReportBanner(report: r) { model.report = nil }.padding(.horizontal, 20).padding(.bottom, 10)
                 }
                 if model.loadingPlan {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List {
-                        Section("Application") {
+                    ZStack(alignment: .bottom) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            GroupHeader(title: "Application")
                             ForEach(model.plan.filter { $0.category == "app" }) { ItemRow(item: $0, selected: $model.selected) }
-                        }
-                        let leftovers = model.plan.filter { $0.category == "leftover" }
-                        Section("Leftover files (\(leftovers.count))") {
+                            let leftovers = model.plan.filter { $0.category == "leftover" }
+                            GroupHeader(title: "Leftover files (\(leftovers.count))").padding(.top, 10)
                             if leftovers.isEmpty {
-                                Text("No leftover files found").foregroundStyle(.secondary)
+                                Text("No leftover files found").foregroundStyle(.secondary).padding(.vertical, 4)
                             }
-                            ForEach(leftovers) { ItemRow(item: $0, selected: $model.selected) }
+                            ForEach(Array(leftovers.enumerated()), id: \.element.id) { i, item in
+                                ItemRow(item: item, selected: $model.selected).appear(delay: 0.04 * Double(i))
+                            }
                         }
+                        .padding(16)
+                        .padding(.bottom, 80)
                     }
-                    .listStyle(.inset)
+                    .scrollIndicators(.never)
+                    .glass(cornerRadius: 20)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 14)
                     let chosen = model.plan.filter { model.selected.contains($0.url) }
                     CleanBar(screen: .uninstaller, count: chosen.count, size: chosen.totalSize, actionTitle: "Uninstall",
                              confirmMessage: "\(app.name) and the selected files will be moved to the Trash.", busy: false) {
                         Task { await model.uninstall() }
                     }
+                    .padding(.bottom, 14)
+                    }
                 }
             }
         } else {
             ZStack {
-                GlowBackground(screen: .uninstaller)
                 VStack(spacing: 14) {
-                    IconTile(.uninstaller, size: 84)
+                    IconTile(.uninstaller, size: 96)
+                        .shadow(color: Screen.uninstaller.colors[0].opacity(0.6), radius: 30)
+                        .appear()
                     Text("Uninstaller").font(.title.weight(.bold))
                     Text("Pick an app on the left to see it with all of its\nsupport files, caches and preferences.")
                         .multilineTextAlignment(.center).foregroundStyle(.secondary)
@@ -156,5 +172,57 @@ struct UninstallerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+private struct AppRow: View {
+    let app: InstalledApp
+    let selected: Bool
+    let namespace: Namespace.ID
+    let action: () -> Void
+    @ViewState private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                fileIcon(app.url).resizable().frame(width: 32, height: 32)
+                    .scaleEffect(hovering ? 1.08 : 1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(app.name).lineLimit(1).fontWeight(selected ? .semibold : .regular)
+                    Text(app.version.map { "Version \($0)" } ?? " ").font(.caption).foregroundStyle(.white.opacity(0.55))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .background {
+                if selected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LinearGradient(colors: Screen.uninstaller.colors.map { $0.opacity(0.35) },
+                                             startPoint: .leading, endPoint: .trailing))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.18)))
+                        .matchedGeometryEffect(id: "app-selection", in: namespace)
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(0.06))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
+    }
+}
+
+/// Small uppercase-style group title used inside glass panels (replaces List section headers,
+/// whose pinned backgrounds are opaque).
+struct GroupHeader: View {
+    let title: String
+    var note: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+            if let note { Text(note).font(.caption).foregroundStyle(.white.opacity(0.5)) }
+        }
+        .padding(.bottom, 4)
     }
 }

@@ -58,7 +58,7 @@ struct ItemRow: View {
     }
 }
 
-/// Bottom bar with selection summary and a confirmed destructive action.
+/// Floating glass bar with selection summary and a confirmed destructive action.
 struct CleanBar: View {
     let screen: Screen
     let count: Int
@@ -70,22 +70,31 @@ struct CleanBar: View {
     @ViewState private var confirming = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 18) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(size.bytes).font(.title3.weight(.semibold)).monospacedDigit()
-                Text("\(count) item\(count == 1 ? "" : "s") selected").font(.caption).foregroundStyle(.secondary)
+                CountingBytes(value: Double(size))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                    .animation(.smooth(duration: 0.4), value: size)
+                Text("\(count) item\(count == 1 ? "" : "s") selected")
+                    .font(.caption).foregroundStyle(.white.opacity(0.6))
+                    .contentTransition(.numericText())
+                    .animation(.smooth, value: count)
             }
-            Spacer()
+            .frame(minWidth: 120, alignment: .leading)
             if busy { ProgressView().controlSize(.small) }
             Button(actionTitle) { confirming = true }
-                .buttonStyle(GradientButtonStyle(gradient: screen.gradient))
+                .buttonStyle(GradientButtonStyle(screen: screen))
                 .disabled(count == 0 || busy)
                 .keyboardShortcut(.defaultAction)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .padding(.leading, 22)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .glassCapsule()
+        .shadow(color: .black.opacity(0.3), radius: 20, y: 8)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity)
+        .appear(delay: 0.15)
         .confirmationDialog("\(actionTitle) \(size.bytes)?", isPresented: $confirming) {
             Button(actionTitle, role: .destructive, action: action)
         } message: {
@@ -101,21 +110,28 @@ struct LandingView: View {
     let message: String
     var busy = false
     var status: String?
+    var progress: Double?
     let action: () -> Void
 
     var body: some View {
-        ZStack {
-            GlowBackground(screen: screen)
-            VStack(spacing: 22) {
-                HeroButton(screen: screen, title: buttonTitle, busy: busy, action: action)
-                Text(busy ? (status ?? "Scanning…") : message)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 440)
-                    .contentTransition(.opacity)
-                    .animation(.default, value: status)
-            }
+        VStack(spacing: 18) {
+            Text(screen.rawValue)
+                .font(.system(size: 30, weight: .bold))
+                .appear()
+            Text(message)
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 460)
+                .appear(delay: 0.08)
+            HeroButton(screen: screen, title: buttonTitle, busy: busy, progress: progress, action: action)
+                .padding(.vertical, 6)
+                .appear(delay: 0.16)
+            Text(busy ? (status ?? "Scanning…") : " ")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.white.opacity(0.75))
+                .contentTransition(.opacity)
+                .animation(.default, value: status)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

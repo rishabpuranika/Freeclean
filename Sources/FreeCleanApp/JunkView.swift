@@ -13,6 +13,11 @@ final class JunkModel {
     var inspected: JunkCategory?
     let scanner = JunkScanner()
 
+    var progress: Double? {
+        guard phase == .scanning else { return nil }
+        return Double(results.count) / Double(JunkCategory.allCases.count)
+    }
+
     var allItems: [ScanItem] { JunkCategory.allCases.flatMap { results[$0] ?? [] } }
     var selectedItems: [ScanItem] { allItems.filter { selected.contains($0.url) } }
     var foundTotal: Int64 { allItems.totalSize }
@@ -54,56 +59,72 @@ struct JunkView: View {
     @Bindable var model: JunkModel
 
     var body: some View {
-        Group {
+        ZStack {
             switch model.phase {
             case .idle, .scanning:
-                LandingView(screen: .junk, buttonTitle: "Scan",
-                            message: "Find caches, logs, Xcode and developer junk that's safe to remove.\nNothing is touched until you confirm.",
-                            busy: model.phase == .scanning,
-                            status: model.scanningCategory.map { "Scanning \($0.title)…" }) {
-                    Task { await model.scan() }
+                VStack(spacing: 0) {
+                    LandingView(screen: .junk, buttonTitle: "Scan",
+                                message: "Find caches, logs, Xcode and developer junk that's safe to remove. Nothing is touched until you confirm.",
+                                busy: model.phase == .scanning,
+                                status: model.scanningCategory.map { "Scanning \($0.title)…" },
+                                progress: model.progress) {
+                        Task { await model.scan() }
+                    }
+                    if model.phase == .scanning {
+                        ScanChecklist(model: model)
+                            .padding(.bottom, 36)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
+                .transition(.opacity)
             case .results, .cleaning:
-                results
+                results.transition(.opacity.combined(with: .scale(scale: 0.98)))
             case .done:
                 SuccessView(screen: .junk, report: model.report ?? TrashReport(), doneTitle: "Scan Again") {
                     Task { await model.scan() }
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
-        .animation(.smooth, value: model.phase)
-        .toolbar {
-            if model.phase == .results {
-                Button { Task { await model.scan() } } label: { Label("Rescan", systemImage: "arrow.clockwise") }
-            }
-        }
+        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: model.phase)
     }
 
     private var results: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Scan complete").font(.headline).foregroundStyle(.secondary)
-                            Text(model.foundTotal.bytes)
-                                .font(.system(size: 48, weight: .bold, design: .rounded))
-                                .foregroundStyle(Screen.junk.gradient)
-                            Text("of junk found across \(model.allItems.count) items").foregroundStyle(.secondary)
-                        }
-                        Spacer()
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Scan complete", systemImage: "checkmark.seal.fill")
+                            .font(.headline).foregroundStyle(.white.opacity(0.7))
+                            .symbolRenderingMode(.multicolor)
+                        CountUpBytes(target: model.foundTotal)
+                            .font(.system(size: 56, weight: .bold, design: .rounded))
+                            .shadow(color: Screen.junk.colors[0].opacity(0.6), radius: 20)
+                        Text("of junk found across \(model.allItems.count) items").foregroundStyle(.white.opacity(0.65))
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 14)], spacing: 14) {
-                        ForEach(JunkCategory.allCases) { c in
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: .topTrailing) {
+                        Button { Task { await model.scan() } } label: { Label("Rescan", systemImage: "arrow.clockwise") }
+                            .buttonStyle(.borderless)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .glassCapsule(interactive: true)
+                    }
+                    .appear()
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                        ForEach(Array(JunkCategory.allCases.enumerated()), id: \.element) { i, c in
                             CategoryCard(category: c, items: model.items(c), selectedSize: model.selectedSize(c),
                                          isInspected: model.inspected == c,
-                                         toggle: { model.setCategory(c, on: $0) },
-                                         review: { model.inspected = model.inspected == c ? nil : c })
+                                         toggle: { on in withAnimation(.snappy) { model.setCategory(c, on: on) } },
+                                         review: { withAnimation(.smooth) { model.inspected = model.inspected == c ? nil : c } })
+                                .appear(delay: 0.12 + Double(i) * 0.06)
                         }
                     }
                 }
-                .padding(24)
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+                .padding(.bottom, 110)
             }
+            .scrollContentBackground(.hidden)
             CleanBar(screen: .junk, count: model.selectedItems.count, size: model.selectedItems.totalSize,
                      actionTitle: "Clean",
                      confirmMessage: model.selectedItems.contains { $0.category == JunkCategory.trash.rawValue }
@@ -117,6 +138,45 @@ struct JunkView: View {
             if let c = model.inspected {
                 CategoryInspector(category: c, items: model.items(c), selected: $model.selected)
                     .inspectorColumnWidth(min: 320, ideal: 380, max: 520)
+            }
+        }
+    }
+}
+
+/// Live list of categories ticking off as the scan progresses.
+struct ScanChecklist: View {
+    let model: JunkModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(JunkCategory.allCases) { c in
+                let done = model.results[c] != nil
+                let active = model.scanningCategory == c
+                HStack(spacing: 7) {
+                    ZStack {
+                        if done {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                                .transition(.scale.combined(with: .opacity))
+                        } else if active {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: c.icon).foregroundStyle(.white.opacity(0.4))
+                        }
+                    }
+                    .frame(width: 16, height: 16)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(c.title).font(.caption.weight(.semibold))
+                        Text(done ? (model.results[c] ?? []).totalSize.bytes : active ? "Scanning…" : "Waiting")
+                            .font(.caption2).foregroundStyle(.white.opacity(0.6))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .glassCapsule(tint: active ? c.color.opacity(0.35) : nil)
+                .opacity(done || active ? 1 : 0.6)
+                .scaleEffect(active ? 1.05 : 1)
+                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: active)
+                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: done)
             }
         }
     }
@@ -137,7 +197,8 @@ struct CategoryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
-                IconTile(category, size: 38)
+                IconTile(category, size: 40)
+                    .symbolEffect(.bounce, value: hovering)
                 Spacer()
                 Toggle("", isOn: Binding(get: { state }, set: toggle))
                     .labelsHidden()
@@ -147,11 +208,11 @@ struct CategoryCard: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(category.title).font(.headline)
-                Text(category.detail).font(.caption).foregroundStyle(.secondary)
+                Text(category.detail).font(.caption).foregroundStyle(.white.opacity(0.6))
                     .lineLimit(2, reservesSpace: true)
             }
             HStack(alignment: .lastTextBaseline) {
-                Text(total.bytes).font(.system(.title2, design: .rounded).weight(.semibold))
+                CountUpBytes(target: total).font(.system(.title2, design: .rounded).weight(.bold))
                     .foregroundStyle(items.isEmpty ? .secondary : .primary)
                 if state && selectedSize != total {
                     Text("\(selectedSize.bytes) selected").font(.caption).foregroundStyle(.secondary)
@@ -164,14 +225,17 @@ struct CategoryCard: View {
                 }
             }
         }
-        .card()
+        .card(padding: 18, tint: state ? category.color.opacity(0.18) : nil)
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(category.color.opacity(isInspected ? 0.9 : hovering ? 0.4 : 0), lineWidth: 2)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(category.color.opacity(isInspected ? 0.9 : hovering ? 0.45 : 0), lineWidth: 1.5)
         )
-        .opacity(items.isEmpty ? 0.6 : 1)
+        .opacity(items.isEmpty ? 0.55 : 1)
+        .scaleEffect(hovering && !items.isEmpty ? 1.015 : 1)
+        .shadow(color: category.color.opacity(hovering ? 0.35 : 0), radius: 18, y: 6)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
+        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: hovering)
+        .animation(.smooth, value: state)
     }
 }
 
@@ -198,8 +262,9 @@ struct CategoryInspector: View {
             }
             .padding(14)
             Divider()
-            List(items) { ItemRow(item: $0, selected: $selected) }
+            List(items) { ItemRow(item: $0, selected: $selected).listRowBackground(Color.clear) }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
         }
     }
 }

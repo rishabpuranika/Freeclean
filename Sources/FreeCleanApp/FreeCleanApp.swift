@@ -17,9 +17,9 @@ struct FreeCleanApp: App {
     var body: some Scene {
         WindowGroup("FreeClean") {
             ContentView()
-                .frame(minWidth: 980, minHeight: 640)
+                .frame(minWidth: 1000, minHeight: 660)
         }
-        .windowToolbarStyle(.unified)
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1120, height: 740)
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -53,21 +53,18 @@ struct ContentView: View {
     @ViewState var large = LargeFilesModel()
     @ViewState var apps = UninstallerModel()
 
+    private var current: Screen { screen ?? .junk }
+
     var body: some View {
-        NavigationSplitView {
-            List(selection: $screen) {
-                Section("Cleanup") {
-                    ForEach([Screen.junk, .large, .uninstaller]) { row($0) }
-                }
-                Section("Performance") {
-                    ForEach([Screen.disk, .memory]) { row($0) }
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 210, ideal: 230)
-            .safeAreaInset(edge: .bottom) { SidebarDiskGauge().padding(12) }
-        } detail: {
-            Group {
-                switch screen ?? .junk {
+        // A custom sidebar instead of NavigationSplitView: the system split view paints opaque chrome
+        // over parts of the window, which breaks up the live background. Here one backdrop fills the
+        // whole window and the sidebar floats on it as glass, like CleanMyMac.
+        HStack(spacing: 0) {
+            Sidebar(selection: Binding(get: { current }, set: { screen = $0 }))
+                .frame(width: 232)
+                .padding(10)
+            ZStack {
+                switch current {
                 case .junk: JunkView(model: junk)
                 case .large: LargeFilesView(model: large)
                 case .uninstaller: UninstallerView(model: apps)
@@ -75,14 +72,90 @@ struct ContentView: View {
                 case .memory: MemoryStartupView()
                 }
             }
-            .navigationTitle("")
+            .id(current)
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .offset(y: 14)).combined(with: .scale(scale: 0.985)),
+                removal: .opacity
+            ))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 22)
+        }
+        .animation(.spring(response: 0.5, dampingFraction: 0.88), value: current)
+        .background(LiveBackground(screen: current))
+        .ignoresSafeArea(.container, edges: .top)
+        .preferredColorScheme(.dark)
+        .tint(current.colors[1])
+    }
+}
+
+struct Sidebar: View {
+    @Binding var selection: Screen
+    @Namespace private var highlight
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Color.clear.frame(height: 34) // room for the traffic-light buttons
+            section("Cleanup", [.junk, .large, .uninstaller])
+            section("Performance", [.disk, .memory])
+            Spacer()
+            SidebarDiskGauge()
+        }
+        .padding(10)
+        .frame(maxHeight: .infinity)
+        .glass(cornerRadius: 22)
+    }
+
+    private func section(_ title: String, _ screens: [Screen]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 2)
+            ForEach(screens) { row($0) }
         }
     }
 
     private func row(_ s: Screen) -> some View {
-        Label { Text(s.rawValue) } icon: { IconTile(s) }
-            .padding(.vertical, 2)
-            .tag(s)
+        let selected = selection == s
+        return Button {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) { selection = s }
+        } label: {
+            HStack(spacing: 10) {
+                IconTile(s, size: 26)
+                Text(s.rawValue)
+                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(.white.opacity(selected ? 1 : 0.82))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background {
+                if selected {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(LinearGradient(colors: s.colors.map { $0.opacity(0.35) }, startPoint: .leading, endPoint: .trailing))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.18)))
+                        .matchedGeometryEffect(id: "selection", in: highlight)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SidebarRowStyle())
+        .keyboardShortcut(KeyEquivalent(Character("\((Screen.allCases.firstIndex(of: s) ?? 0) + 1)")), modifiers: .command)
+    }
+}
+
+private struct SidebarRowStyle: ButtonStyle {
+    @ViewState private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(hovering ? 0.06 : 0)))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.15), value: hovering)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .onHover { hovering = $0 }
     }
 }
 
@@ -117,10 +190,11 @@ struct SidebarDiskGauge: View {
                 .frame(height: 6)
                 Text("\(v.availableImportant.bytes) available of \(v.total.bytes)")
                     .font(.caption2).foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
             }
         }
-        .padding(10)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(12)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onReceive(timer) { _ in volume = DiskUsage.volume() }
     }
 }

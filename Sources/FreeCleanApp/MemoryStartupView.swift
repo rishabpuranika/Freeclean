@@ -17,10 +17,11 @@ struct MemoryStartupView: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
-            switch tab {
-            case .memory: MemoryPanel()
-            case .startup: StartupPanel()
-            }
+            Group { switch tab {
+            case .memory: MemoryPanel().transition(.opacity.combined(with: .move(edge: .leading)))
+            case .startup: StartupPanel().transition(.opacity.combined(with: .move(edge: .trailing)))
+            } }
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: tab)
         }
     }
 }
@@ -42,12 +43,12 @@ struct MemoryPanel: View {
             VStack(spacing: 16) {
                 if let m = memory {
                     HStack(alignment: .top, spacing: 16) {
-                        gaugeCard(m).frame(width: 240)
-                        historyCard(m)
+                        gaugeCard(m).frame(width: 240).appear(delay: 0.05)
+                        historyCard(m).appear(delay: 0.12)
                     }
-                    breakdownCard(m)
+                    breakdownCard(m).appear(delay: 0.18)
                 }
-                processCard
+                processCard.appear(delay: 0.24)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
@@ -65,9 +66,12 @@ struct MemoryPanel: View {
                 Circle().trim(from: 0, to: m.usedFraction)
                     .stroke(pressureColor(m.usedFraction).gradient, style: StrokeStyle(lineWidth: 14, lineCap: .round))
                     .rotationEffect(.degrees(-90))
+                    .shadow(color: pressureColor(m.usedFraction).opacity(0.7), radius: 10)
                     .animation(.smooth, value: m.usedFraction)
                 VStack(spacing: 0) {
                     Text("\(Int(m.usedFraction * 100))%").font(.system(size: 34, weight: .bold, design: .rounded))
+                        .contentTransition(.numericText())
+                        .animation(.smooth, value: Int(m.usedFraction * 100))
                     Text("in use").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -94,6 +98,7 @@ struct MemoryPanel: View {
                     .interpolationMethod(.monotone)
             }
             .chartYScale(domain: 0...(Double(m.total) / 1e9))
+            .chartXScale(domain: max(1, tick - 59)...max(60, tick))
             .chartXAxis(.hidden)
             .chartYAxis { AxisMarks(position: .leading) { v in
                 AxisGridLine()
@@ -193,15 +198,20 @@ struct StartupPanel: View {
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).font(.callout)
             }
-            List {
-                section("Your agents", items.filter(\.isUserOwned),
-                        note: "Background helpers installed for your account. Disabling moves the file to the Trash.")
-                section("System-wide", items.filter { !$0.isUserOwned },
-                        note: "Installed for all users. Remove these from the app that installed them.")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    section("Your agents", items.filter(\.isUserOwned),
+                            note: "Background helpers installed for your account. Disabling moves the file to the Trash.")
+                    section("System-wide", items.filter { !$0.isUserOwned },
+                            note: "Installed for all users. Remove these from the app that installed them.")
+                        .padding(.top, 14)
+                }
+                .padding(16)
             }
-            .listStyle(.inset)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.separator.opacity(0.6)))
+            .scrollIndicators(.never)
+            .frame(maxHeight: .infinity)
+            .glass(cornerRadius: 20)
+            .appear(delay: 0.08)
             HStack {
                 Text("Login items you added yourself are managed in System Settings.").font(.caption).foregroundStyle(.secondary)
                 Button("Open Login Items") {
@@ -226,8 +236,9 @@ struct StartupPanel: View {
     }
 
     private func section(_ title: String, _ list: [LoginItem], note: String) -> some View {
-        Section {
-            ForEach(list) { item in
+        VStack(alignment: .leading, spacing: 2) {
+            GroupHeader(title: "\(title) (\(list.count))", note: note)
+            ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
                 HStack(spacing: 10) {
                     agentIcon(item).resizable().frame(width: 28, height: 28)
                     VStack(alignment: .leading, spacing: 1) {
@@ -246,12 +257,10 @@ struct StartupPanel: View {
                         Button("Disable") { toDisable = item }.controlSize(.small)
                     }
                 }
-                .padding(.vertical, 3)
-            }
-        } header: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(title) (\(list.count))")
-                Text(note).font(.caption).foregroundStyle(.secondary).textCase(nil)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 6)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(i.isMultiple(of: 2) ? 0.04 : 0)))
+                .appear(delay: min(0.03 * Double(i), 0.4))
             }
         }
     }

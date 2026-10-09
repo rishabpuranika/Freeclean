@@ -20,6 +20,12 @@ scripts/bundle.sh --install
 ```
 This puts the app in `~/Applications/FreeClean.app` and the CLI in `~/.local/bin/freeclean`. Without `--install`, the outputs stay in `build/`.
 
+To share it, package a drag-to-install disk image (universal: Apple Silicon + Intel):
+```bash
+VERSION=1.0 scripts/bundle.sh --dmg
+```
+This creates `build/FreeClean-1.0.dmg`, which opens to a designed install window (background with an arrow from the app to Applications, built by [scripts/make-dmg-background.swift](scripts/make-dmg-background.swift)). Packaging briefly scripts Finder to save that layout, so the first run may ask to let Terminal control Finder. The app is ad-hoc signed, not notarized, so on another Mac the first launch needs **right-click → Open** (or System Settings › Privacy & Security › **Open Anyway**).
+
 For full results (Trash, some app containers), grant **Full Disk Access** to FreeClean (and to your terminal for the CLI) in System Settings › Privacy & Security.
 
 ## CLI examples

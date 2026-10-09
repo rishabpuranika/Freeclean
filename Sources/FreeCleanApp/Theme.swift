@@ -104,7 +104,7 @@ struct PageHeader<Trailing: View>: View {
             IconTile(screen, size: 46)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title ?? screen.rawValue).font(.system(size: 24, weight: .bold))
-                Text(subtitle ?? screen.subtitle).foregroundStyle(.white.opacity(0.65))
+                Text(subtitle ?? screen.subtitle).font(.body.weight(.medium)).foregroundStyle(.white.opacity(0.9))
             }
             Spacer()
             trailing
@@ -123,9 +123,9 @@ extension PageHeader where Trailing == EmptyView {
 }
 
 extension View {
-    /// Glass panel used for every card in the app.
-    func card(padding: CGFloat = 16, tint: Color? = nil) -> some View {
-        self.padding(padding).glass(cornerRadius: 18, tint: tint)
+    /// Glass card used for stats and content panels.
+    func card(padding: CGFloat = 18, tint: Color? = nil) -> some View {
+        self.padding(padding).glass(.primary, cornerRadius: 22, tint: tint)
     }
 }
 
@@ -290,7 +290,7 @@ struct SuccessView: View {
                     .font(.system(size: 50, weight: .bold, design: .rounded))
                     .appear(delay: 0.3)
                 Text("cleaned up from \(report.trashed.count) item\(report.trashed.count == 1 ? "" : "s")")
-                    .font(.title3).foregroundStyle(.white.opacity(0.7))
+                    .font(.title3.weight(.semibold)).foregroundStyle(.white.opacity(0.92))
                     .appear(delay: 0.4)
                 if !report.failed.isEmpty {
                     Label("\(report.failed.count) item(s) couldn't be removed", systemImage: "exclamationmark.triangle.fill")
@@ -298,7 +298,7 @@ struct SuccessView: View {
                         .help(report.failed.map { "\($0.0.lastPathComponent): \($0.1)" }.joined(separator: "\n"))
                 }
                 Text("Removed items are in the Trash if you need them back.")
-                    .font(.callout).foregroundStyle(.white.opacity(0.55))
+                    .font(.callout.weight(.medium)).foregroundStyle(.white.opacity(0.85))
                     .appear(delay: 0.5)
                 Button(doneTitle, action: done).buttonStyle(GradientButtonStyle(screen: screen, large: true))
                     .padding(.top, 6)

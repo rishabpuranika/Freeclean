@@ -81,7 +81,7 @@ struct LargeFilesView: View {
                 }
             }
             .font(.caption.weight(.semibold))
-            .foregroundStyle(.white.opacity(sortKey == key ? 0.9 : 0.55))
+            .foregroundStyle(.primary.opacity(sortKey == key ? 0.9 : 0.5))
         }
         .buttonStyle(.plain)
     }
@@ -207,7 +207,7 @@ private struct FileRow: View {
                 fileIcon(item.url).resizable().frame(width: 26, height: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.name).lineLimit(1).truncationMode(.middle)
-                    Text(tilde(item.url.deletingLastPathComponent())).font(.caption).foregroundStyle(.white.opacity(0.5))
+                    Text(tilde(item.url.deletingLastPathComponent())).font(.caption).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                 }
             }
@@ -215,19 +215,20 @@ private struct FileRow: View {
             Text(isLarge ? "Large" : "Unused")
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, 8).padding(.vertical, 2)
-                .background((isLarge ? Color.orange : Color.purple).opacity(0.2), in: Capsule())
+                .fontWeight(.bold)
+                .background((isLarge ? Color.orange : Color.purple).opacity(0.18), in: Capsule())
                 .foregroundStyle(isLarge ? Color.orange : Color.purple)
                 .frame(width: 70, alignment: .leading)
-            Text(Format.date(item.modified)).foregroundStyle(.white.opacity(0.6)).frame(width: 110, alignment: .leading)
+            Text(Format.date(item.modified)).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
             Text(item.size.bytes).monospacedDigit().fontWeight(.medium).frame(width: 84, alignment: .trailing)
             Button { reveal(item.url) } label: { Image(systemName: "arrow.right.circle.fill") }
-                .buttonStyle(.borderless).foregroundStyle(.white.opacity(hovering ? 0.8 : 0.35))
+                .buttonStyle(.borderless).foregroundStyle(.primary.opacity(hovering ? 0.75 : 0.3))
                 .help("Show in Finder").frame(width: 22)
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isOn ? Screen.large.colors[1].opacity(0.22) : .white.opacity(hovering ? 0.07 : 0))
+                .fill(isOn ? Screen.large.colors[1].opacity(0.22) : .primary.opacity(hovering ? 0.06 : 0))
         )
         .contentShape(Rectangle())
         .onTapGesture { withAnimation(.snappy) { if isOn { selected.remove(item.url) } else { selected.insert(item.url) } } }

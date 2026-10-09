@@ -1,35 +1,88 @@
+import AppKit
+import CoreImage
 import CleanCore
 import SwiftUI
 
 // MARK: - Glass
 
 /// Liquid Glass is composited by the window server, so offscreen snapshots can't capture it.
-/// Snapshot mode flips this to draw the material fallback instead.
+/// Snapshot mode draws the translucent fallback instead.
 nonisolated(unsafe) var useLiquidGlass = ProcessInfo.processInfo.environment["FREECLEAN_SNAPSHOT"] == nil
 
+/// Glass strengths, in the style of the macOS Dock and Raycast: dark, translucent, white text.
+enum GlassTier {
+    /// Cards and content panels.
+    case primary
+    /// Floating chips and small controls; a lighter, clearer glass.
+    case secondary
+}
+
 extension View {
-    /// Liquid Glass on macOS 26+, frosted material before that.
-    @ViewBuilder
-    func glass(cornerRadius: CGFloat = 18, tint: Color? = nil, interactive: Bool = false) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(macOS 26, *), useLiquidGlass {
-            glassEffect(Glass.regular.tint(tint).interactive(interactive), in: shape)
-        } else {
-            background((tint ?? .clear).opacity(0.25), in: shape)
-                .background(Color.white.opacity(0.07), in: shape)
-                .overlay(shape.strokeBorder(.white.opacity(0.14)))
-        }
+    /// Dock-style glass: Liquid Glass on macOS 26+, otherwise a translucent fill with a crisp hairline
+    /// border and a bright rim along the top edge (the Raycast look).
+    func glass(_ tier: GlassTier = .primary, cornerRadius: CGFloat = 22, tint: Color? = nil) -> some View {
+        modifier(GlassModifier(tier: tier, cornerRadius: cornerRadius, tint: tint))
     }
 
-    @ViewBuilder
-    func glassCapsule(tint: Color? = nil, interactive: Bool = false) -> some View {
+    func glassCapsule(_ tier: GlassTier = .secondary, tint: Color? = nil) -> some View {
+        modifier(GlassModifier(tier: tier, cornerRadius: .infinity, tint: tint))
+    }
+}
+
+private struct GlassModifier: ViewModifier {
+    let tier: GlassTier
+    let cornerRadius: CGFloat
+    let tint: Color?
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius == .infinity ? 999 : cornerRadius, style: .continuous)
         if #available(macOS 26, *), useLiquidGlass {
-            glassEffect(Glass.regular.tint(tint).interactive(interactive), in: Capsule())
+            let glass = tier == .primary ? Glass.regular : Glass.clear
+            content.glassEffect(glass.tint(tint), in: shape)
         } else {
-            background((tint ?? .clear).opacity(0.3), in: Capsule())
-                .background(Color.white.opacity(0.1), in: Capsule())
-                .overlay(Capsule().strokeBorder(.white.opacity(0.16)))
+            content
+                .background {
+                    ZStack {
+                        shape.fill(Color.white.opacity(tier == .primary ? 0.08 : 0.12))
+                        if let tint { shape.fill(tint) }
+                    }
+                }
+                .overlay {
+                    ZStack {
+                        shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                        shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.35), .white.opacity(0)],
+                                                          startPoint: .top, endPoint: .center), lineWidth: 1)
+                    }
+                    .allowsHitTesting(false)
+                }
         }
+    }
+}
+
+/// The window background: a real behind-window blur of the desktop (like the Dock or Raycast),
+/// and it makes the hosting window non-opaque so the blur can show through.
+struct WindowVibrancy: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .hudWindow
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = VibrancyView()
+        v.material = material
+        v.blendingMode = .behindWindow
+        v.state = .active
+        return v
+    }
+
+    func updateNSView(_ v: NSVisualEffectView, context: Context) { v.material = material }
+
+    private final class VibrancyView: NSVisualEffectView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 }
 

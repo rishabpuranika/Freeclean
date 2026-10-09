@@ -8,15 +8,19 @@ import SwiftUI
 /// (The previous SwiftUI TimelineView version re-rendered every frame and cost ~25% CPU while idle.)
 struct LiveBackground: NSViewRepresentable {
     let screen: Screen
+    /// Below 1, the backdrop becomes a translucent color wash over the window's behind-window blur.
+    var tint: Double = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeNSView(context: Context) -> BackdropView {
         let v = BackdropView()
+        v.setTint(tint)
         v.apply(colors: screen.backdrop, animated: false, reduceMotion: reduceMotion)
         return v
     }
 
     func updateNSView(_ v: BackdropView, context: Context) {
+        v.setTint(tint)
         v.apply(colors: screen.backdrop, animated: true, reduceMotion: reduceMotion)
     }
 }
@@ -57,6 +61,15 @@ final class BackdropView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// Full strength paints an opaque backdrop; lower values drop the solid base so whatever is
+    /// behind (the desktop blur) shows through, tinted by the drifting colors.
+    func setTint(_ t: Double) {
+        let translucent = t < 1
+        base.isHidden = translucent
+        vignette.isHidden = translucent
+        layer?.opacity = Float(t)
+    }
 
     func apply(colors new: [Color], animated: Bool, reduceMotion rm: Bool) {
         let motionChanged = rm != reduceMotion

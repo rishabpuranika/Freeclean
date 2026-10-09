@@ -38,6 +38,7 @@ enum Snapshotter {
         done.report = fake
         done.phase = .done
         shots.append(("Smart Scan done", .junk, done, landing.1))
+        shots.append(("Disk Usage loading", .disk, junk, large))
 
         for (name, screen, j, l) in shots where only.map({ name.localizedCaseInsensitiveContains($0) }) ?? true {
             for dark in [false, true] {
@@ -53,7 +54,8 @@ enum Snapshotter {
                 window.contentView = NSHostingView(rootView: view)
                 window.orderFrontRegardless()
                 if j === scanning { Task { await scanning.scan() } }
-                let wait: Double = j === scanning ? 1.2 : j === done ? 1.6 : screen == .memory ? 7 : screen == .disk ? 25 : 3
+                let wait: Double = name.hasSuffix("loading") ? 1.0 : j === scanning ? 1.2 : j === done ? 1.6
+                    : screen == .memory ? 7 : screen == .disk ? 25 : 3
                 try? await Task.sleep(for: .seconds(wait))
                 guard let target = window.contentView?.superview ?? window.contentView else { continue }
                 if let rep = target.bitmapImageRepForCachingDisplay(in: target.bounds) {

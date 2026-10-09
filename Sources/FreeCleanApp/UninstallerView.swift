@@ -68,15 +68,15 @@ struct UninstallerView: View {
                     }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .glassCapsule()
+                .background(.primary.opacity(0.07), in: Capsule())
                 .padding(12)
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(model.filtered) { app in
                             AppRow(app: app, selected: model.current?.url == app.url, namespace: highlight) {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
-                                    Task { await model.select(app) }
-                                }
+                                // Move the highlight now (animated); the leftover scan loads afterwards.
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) { model.current = app }
+                                Task { await model.select(app) }
                             }
                         }
                     }
@@ -108,13 +108,13 @@ struct UninstallerView: View {
                         if let v = app.version { Text("Version \(v)") }
                         if let b = app.bundleID { Text("·"); Text(b) }
                     }
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.callout.weight(.medium)).foregroundStyle(.white.opacity(0.9))
                     if app.isRunning {
                         Label("\(app.name) is running. Quit it before uninstalling.", systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(.orange.opacity(0.15), in: Capsule())
+                            .font(.callout.weight(.semibold))
                             .foregroundStyle(.orange)
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .glassCapsule(.primary)
                     }
                 }
                 .padding(.top, 28).padding(.bottom, 18)
@@ -189,7 +189,7 @@ private struct AppRow: View {
                     .scaleEffect(hovering ? 1.08 : 1)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(app.name).lineLimit(1).fontWeight(selected ? .semibold : .regular)
-                    Text(app.version.map { "Version \($0)" } ?? " ").font(.caption).foregroundStyle(.white.opacity(0.55))
+                    Text(app.version.map { "Version \($0)" } ?? " ").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
@@ -202,7 +202,7 @@ private struct AppRow: View {
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.18)))
                         .matchedGeometryEffect(id: "app-selection", in: namespace)
                 } else if hovering {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(0.06))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.primary.opacity(0.06))
                 }
             }
             .contentShape(Rectangle())
@@ -220,8 +220,8 @@ struct GroupHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
-            if let note { Text(note).font(.caption).foregroundStyle(.white.opacity(0.5)) }
+            Text(title).font(.subheadline.weight(.bold)).foregroundStyle(.secondary)
+            if let note { Text(note).font(.caption).foregroundStyle(.tertiary) }
         }
         .padding(.bottom, 4)
     }

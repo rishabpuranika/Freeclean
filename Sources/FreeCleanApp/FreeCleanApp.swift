@@ -81,7 +81,15 @@ struct ContentView: View {
             .clipped()
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.88), value: current)
-        .background(LiveBackground(screen: current))
+        .background {
+            // Raycast/Dock-style: the desktop shows through a real behind-window blur, washed with
+            // the screen's drifting colors.
+            ZStack {
+                WindowVibrancy(material: .hudWindow)
+                LiveBackground(screen: current, tint: 0.55)
+            }
+            .ignoresSafeArea()
+        }
         .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(.dark)
         .tint(current.colors[1])
@@ -104,19 +112,17 @@ struct Sidebar: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
         .frame(maxHeight: .infinity)
-        // Full-height column flush with the window edge: a darker translucent tint over the live
-        // backdrop, with a hairline on the inner edge.
-        .background(.black.opacity(0.28))
-        .overlay(alignment: .trailing) {
-            Rectangle().fill(.white.opacity(0.08)).frame(width: 1)
-        }
+        // Full-height column flush with the window edge: a slightly darker translucent strip with a
+        // hairline, like Raycast's or Finder's sidebar.
+        .background(.black.opacity(0.2))
+        .overlay(alignment: .trailing) { Rectangle().fill(.white.opacity(0.08)).frame(width: 1) }
     }
 
     private func section(_ title: String, _ screens: [Screen]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.75))
                 .padding(.horizontal, 10)
                 .padding(.top, 10)
                 .padding(.bottom, 2)
@@ -132,8 +138,9 @@ struct Sidebar: View {
             HStack(spacing: 10) {
                 IconTile(s, size: 26)
                 Text(s.rawValue)
-                    .font(.system(size: 13, weight: selected ? .semibold : .medium))
-                    .foregroundStyle(.white.opacity(selected ? 1 : 0.82))
+                    .font(.system(size: 13, weight: selected ? .bold : .semibold))
+                    .foregroundStyle(.white.opacity(selected ? 1 : 0.92))
+                    .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
@@ -158,7 +165,7 @@ private struct SidebarRowStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(hovering ? 0.06 : 0)))
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(hovering ? 0.12 : 0)))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.15), value: hovering)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
@@ -196,12 +203,12 @@ struct SidebarDiskGauge: View {
                 }
                 .frame(height: 6)
                 Text("\(v.availableImportant.bytes) available of \(v.total.bytes)")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.caption2.weight(.semibold)).foregroundStyle(.white.opacity(0.92))
                     .contentTransition(.numericText())
             }
         }
         .padding(12)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .glass(.secondary, cornerRadius: 18)
         .onReceive(timer) { _ in volume = DiskUsage.volume() }
     }
 }

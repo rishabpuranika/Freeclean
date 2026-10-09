@@ -259,7 +259,7 @@ struct StartupPanel: View {
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, 6)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(i.isMultiple(of: 2) ? 0.04 : 0)))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.primary.opacity(i.isMultiple(of: 2) ? 0.04 : 0)))
                 .appear(delay: min(0.03 * Double(i), 0.4))
             }
         }

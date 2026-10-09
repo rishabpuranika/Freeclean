@@ -95,19 +95,19 @@ struct JunkView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Scan complete", systemImage: "checkmark.seal.fill")
-                            .font(.headline).foregroundStyle(.white.opacity(0.7))
+                            .font(.headline.weight(.bold)).foregroundStyle(.white.opacity(0.92))
                             .symbolRenderingMode(.multicolor)
                         CountUpBytes(target: model.foundTotal)
                             .font(.system(size: 56, weight: .bold, design: .rounded))
                             .shadow(color: Screen.junk.colors[0].opacity(0.6), radius: 20)
-                        Text("of junk found across \(model.allItems.count) items").foregroundStyle(.white.opacity(0.65))
+                        Text("of junk found across \(model.allItems.count) items").font(.title3.weight(.semibold)).foregroundStyle(.white.opacity(0.92))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .overlay(alignment: .topTrailing) {
-                        Button { Task { await model.scan() } } label: { Label("Rescan", systemImage: "arrow.clockwise") }
+                        Button { Task { await model.scan() } } label: { Label("Rescan", systemImage: "arrow.clockwise").fontWeight(.semibold).foregroundStyle(.white) }
                             .buttonStyle(.borderless)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .glassCapsule(interactive: true)
+                            .glassCapsule()
                     }
                     .appear()
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
@@ -137,6 +137,7 @@ struct JunkView: View {
         .inspector(isPresented: Binding(get: { model.inspected != nil }, set: { if !$0 { model.inspected = nil } })) {
             if let c = model.inspected {
                 CategoryInspector(category: c, items: model.items(c), selected: $model.selected)
+                    .background(.black.opacity(0.18))
                     .inspectorColumnWidth(min: 320, ideal: 380, max: 520)
             }
         }
@@ -160,14 +161,14 @@ struct ScanChecklist: View {
                         } else if active {
                             ProgressView().controlSize(.mini)
                         } else {
-                            Image(systemName: c.icon).foregroundStyle(.white.opacity(0.4))
+                            Image(systemName: c.icon).foregroundStyle(.secondary)
                         }
                     }
                     .frame(width: 16, height: 16)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(c.title).font(.caption.weight(.semibold))
                         Text(done ? (model.results[c] ?? []).totalSize.bytes : active ? "Scanning…" : "Waiting")
-                            .font(.caption2).foregroundStyle(.white.opacity(0.6))
+                            .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                             .contentTransition(.numericText())
                     }
                 }
@@ -208,7 +209,7 @@ struct CategoryCard: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(category.title).font(.headline)
-                Text(category.detail).font(.caption).foregroundStyle(.white.opacity(0.6))
+                Text(category.detail).font(.caption).foregroundStyle(.secondary)
                     .lineLimit(2, reservesSpace: true)
             }
             HStack(alignment: .lastTextBaseline) {
@@ -230,7 +231,7 @@ struct CategoryCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(category.color.opacity(isInspected ? 0.9 : hovering ? 0.45 : 0), lineWidth: 1.5)
         )
-        .opacity(items.isEmpty ? 0.55 : 1)
+        .opacity(items.isEmpty ? 0.8 : 1)
         .scaleEffect(hovering && !items.isEmpty ? 1.015 : 1)
         .shadow(color: category.color.opacity(hovering ? 0.35 : 0), radius: 18, y: 6)
         .onHover { hovering = $0 }

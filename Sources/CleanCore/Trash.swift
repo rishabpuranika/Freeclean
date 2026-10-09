@@ -4,6 +4,8 @@ public struct TrashReport: Sendable {
     public var trashed: [URL] = []
     public var failed: [(URL, String)] = []
     public var freed: Int64 = 0
+
+    public init() {}
 }
 
 public enum Trash {

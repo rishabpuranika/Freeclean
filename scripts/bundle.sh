@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds FreeClean.app (universal: Apple Silicon + Intel) and the freeclean CLI in release mode.
 #   scripts/bundle.sh            -> build/FreeClean.app, build/freeclean
-#   scripts/bundle.sh --install  -> also copies the app to ~/Applications and the CLI to ~/.local/bin
+#   scripts/bundle.sh --install  -> also installs the app to /Applications and the CLI to ~/.local/bin
 #   scripts/bundle.sh --dmg      -> also packages build/FreeClean-<version>.dmg for sharing
 # Options can be combined. Set VERSION=1.2 to stamp a version (default 1.0).
 set -euo pipefail
@@ -56,11 +56,24 @@ codesign --force -s - build/freeclean
 echo "Built $APP and build/freeclean ($(lipo -archs "$APP/Contents/MacOS/FreeClean"))"
 
 if $INSTALL; then
-  mkdir -p ~/Applications ~/.local/bin
-  rm -rf ~/Applications/FreeClean.app
-  cp -R "$APP" ~/Applications/
+  # Install where a drag from the disk image goes: /Applications, which Spotlight indexes (a home-folder
+  # ~/Applications may not be). Fall back to ~/Applications only if /Applications isn't writable.
+  DEST=/Applications
+  [[ -w "$DEST" ]] || DEST="$HOME/Applications"
+  mkdir -p "$DEST" ~/.local/bin
+  osascript -e 'quit app "FreeClean"' >/dev/null 2>&1 || true
+  rm -rf "$DEST/FreeClean.app"
+  cp -R "$APP" "$DEST/"
+  # Remove an older copy left in ~/Applications by previous versions of this script, so there's only one.
+  if [[ "$DEST" == /Applications && -d "$HOME/Applications/FreeClean.app" ]]; then
+    rm -rf "$HOME/Applications/FreeClean.app"
+    echo "Removed old copy from ~/Applications"
+  fi
+  # Tell Launch Services and Spotlight about the new bundle right away.
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DEST/FreeClean.app"
+  mdimport "$DEST/FreeClean.app" 2>/dev/null || true
   cp build/freeclean ~/.local/bin/freeclean
-  echo "Installed ~/Applications/FreeClean.app and ~/.local/bin/freeclean"
+  echo "Installed $DEST/FreeClean.app and ~/.local/bin/freeclean"
   [[ ":$PATH:" == *":$HOME/.local/bin:"* ]] || echo "Add ~/.local/bin to your PATH to use 'freeclean' anywhere."
 fi
 

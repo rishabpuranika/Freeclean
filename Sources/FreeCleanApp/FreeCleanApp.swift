@@ -5,6 +5,8 @@ import SwiftUI
 
 @main
 struct FreeCleanApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
         // Needed when launched as a bare SPM executable (swift run) so the window comes to front.
         NSApplication.shared.setActivationPolicy(.regular)
@@ -15,15 +17,38 @@ struct FreeCleanApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("FreeClean") {
+        // A single-window app: `Window` (not `WindowGroup`) means no duplicate windows and no File > New
+        // Window, and clicking the Dock icon after the window is closed opens it again.
+        Window("FreeClean", id: "main") {
             ContentView()
                 .frame(minWidth: 1000, minHeight: 660)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1120, height: 740)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Keep running when the window is closed (like CleanMyMac), so scan results survive and a Dock click
+    /// brings the window straight back. (A single-`Window` SwiftUI app would otherwise quit.)
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// SwiftUI's action for opening the main window, captured by `ContentView` (an `App` can't read it directly).
+    @MainActor static var openMainWindow: (() -> Void)?
+
+    /// Clicking the Dock icon with no visible window: un-minimise the window, or reopen it if it was closed.
+    @MainActor
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else { return true }
+        if let window = sender.windows.first(where: { $0.isMiniaturized }) {
+            window.deminiaturize(nil)
+        } else if let open = Self.openMainWindow {
+            open()
+        } else {
+            return true
         }
+        sender.activate(ignoringOtherApps: true)
+        return false
     }
 }
 
@@ -48,6 +73,7 @@ enum Screen: String, CaseIterable, Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.openWindow) private var openWindow
     @ViewState var screen: Screen? = .junk
     @ViewState var junk = JunkModel()
     @ViewState var large = LargeFilesModel()
@@ -93,6 +119,7 @@ struct ContentView: View {
         .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(.dark)
         .tint(current.colors[1])
+        .onAppear { AppDelegate.openMainWindow = { [openWindow] in openWindow(id: "main") } }
     }
 }
 

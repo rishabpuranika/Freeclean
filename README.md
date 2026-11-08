@@ -18,7 +18,7 @@ Only Command Line Tools are needed, not Xcode.
 ```bash
 scripts/bundle.sh --install
 ```
-This puts the app in `~/Applications/FreeClean.app` and the CLI in `~/.local/bin/freeclean`. Without `--install`, the outputs stay in `build/`.
+This puts the app in `/Applications/FreeClean.app` (where Spotlight finds it) and the CLI in `~/.local/bin/freeclean`. Without `--install`, the outputs stay in `build/`.
 
 To share it, package a drag-to-install disk image (universal: Apple Silicon + Intel):
 ```bash

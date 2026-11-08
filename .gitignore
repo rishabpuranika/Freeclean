@@ -3,3 +3,4 @@ build/
 *.app
 .swiftpm/
 .serena/
+.DS_Store
